@@ -59,6 +59,7 @@
             transition: all 0.2s ease-in-out;
             min-width: 40px;
             min-height: 40px;
+            color: #c9d1d9;
         }
 
         .element-tile:hover {
@@ -89,28 +90,23 @@
             .element-name { font-size: 0.65rem; }
         }
 
-        /* Styling for interactive elements */
+        /* Styling for interactive elements - improved visuals */
         .active-element {
-            border-color: #4CAF50; /* A green color to indicate it can form a compound */
-            box-shadow: 0 0 8px #4CAF50;
+            color: #ffffff;
+            border-color: #64e064; /* A bright green color */
+            box-shadow: 0 0 10px #64e064;
+            animation: pulse-border 1.5s infinite;
         }
         .active-element.hinted {
             animation: pulse 1s infinite;
         }
 
         .selected-element {
-            background-color: #3b82f6; /* A blue color to indicate it's currently selected */
-            border-color: #60a5fa;
+            color: #ffffff;
+            background-color: #00aaff; /* A bright blue color */
+            border-color: #0088cc;
             transform: scale(1.05);
-        }
-
-        .lanthanide-link, .actinide-link {
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .lanthanide-link:hover, .actinide-link:hover {
-            color: #3b82f6;
+            box-shadow: 0 0 12px #00aaff;
         }
         
         /* Custom grid for the f-block elements */
@@ -124,13 +120,19 @@
 
         /* Pulse animation for elements in the mix zone and hint */
         @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 8px #4CAF50; }
-            50% { transform: scale(1.1); box-shadow: 0 0 16px #4CAF50; }
-            100% { transform: scale(1); box-shadow: 0 0 8px #4CAF50; }
+            0% { transform: scale(1); box-shadow: 0 0 8px #64e064; }
+            50% { transform: scale(1.1); box-shadow: 0 0 16px #64e064; }
+            100% { transform: scale(1); box-shadow: 0 0 8px #64e064; }
+        }
+        
+        @keyframes pulse-border {
+            0% { border-color: #64e064; }
+            50% { border-color: #92e692; }
+            100% { border-color: #64e064; }
         }
 
         .mix-element {
-            animation: pulse 1s infinite;
+            animation: pulse-border 1.5s infinite;
         }
         
         /* Shake animation for incorrect combinations */
@@ -253,7 +255,7 @@
                     <button id="show-recipes-button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
                         Show Known Recipes
                     </button>
-                    <button id="hint-button" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all hidden">
+                    <button id="hint-button" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all" disabled>
                         Hint
                     </button>
                     <button id="reset-button" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
@@ -325,10 +327,6 @@
         </div>
     </div>
     
-    <!-- Audio element for success/failure sounds -->
-    <audio id="success-audio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="auto"></audio>
-    <audio id="failure-audio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3" preload="auto"></audio>
-
     <script>
         console.log("Game script loaded successfully.");
 
@@ -566,8 +564,6 @@
         const elementSearch = document.getElementById('element-search');
         const scoreDisplay = document.getElementById('score-display');
         const hintButton = document.getElementById('hint-button');
-        const successAudio = document.getElementById('success-audio');
-        const failureAudio = document.getElementById('failure-audio');
 
         /**
          * Creates a single periodic table element tile.
@@ -647,15 +643,6 @@
         }
         
         /**
-         * Plays a sound effect.
-         * @param {HTMLElement} audioEl - The audio element to play.
-         */
-        function playAudio(audioEl) {
-            audioEl.currentTime = 0; // Rewind to the start
-            audioEl.play().catch(e => console.log("Audio play failed:", e));
-        }
-
-        /**
          * Displays the information for a given element in the info panel.
          * @param {object} element - The element data.
          */
@@ -700,7 +687,6 @@
                 if (compound1 || compound2) {
                     const compound = compound1 || compound2;
                     state = 'compound_formed';
-                    playAudio(successAudio);
                     document.querySelectorAll('.mix-element').forEach(el => el.remove());
                     
                     const compoundTile = document.createElement('div');
@@ -718,10 +704,9 @@
                     updateScoreDisplay();
 
                     document.querySelectorAll('.active-element').forEach(el => el.classList.remove('active-element'));
-                    hintButton.classList.add('hidden');
+                    hintButton.disabled = true; // Disable hint button after a successful compound
                 } else {
                     // Incorrect combination
-                    playAudio(failureAudio);
                     compoundContainer.classList.add('shake-animation');
                     setTimeout(() => {
                         compoundContainer.classList.remove('shake-animation');
@@ -748,7 +733,7 @@
             mixMessage.classList.remove('hidden');
             compoundInfo.classList.add('hidden');
             updateCompoundFormingElements();
-            hintButton.classList.add('hidden');
+            hintButton.disabled = true;
             document.querySelectorAll('.selected-element').forEach(el => el.classList.remove('selected-element'));
         }
 
@@ -806,7 +791,7 @@
                             addElementToMix(element);
                             state = 'selecting_second_element';
                             updateCompoundFormingElements();
-                            hintButton.classList.remove('hidden');
+                            hintButton.disabled = false;
                         } else if (state === 'selecting_second_element' && target.classList.contains('active-element')) {
                             const firstElement = selectedElementsInMix[0];
                             const canCombine = firstElement.compounds?.some(c => c.with === element.symbol);
@@ -832,7 +817,7 @@
                             addElementToMix(element);
                             state = 'selecting_second_element';
                             updateCompoundFormingElements();
-                            hintButton.classList.remove('hidden');
+                            hintButton.disabled = false;
                         } else if (state === 'selecting_second_element' && target.classList.contains('active-element')) {
                             const firstElement = selectedElementsInMix[0];
                             const canCombine = firstElement.compounds?.some(c => c.with === element.symbol);
