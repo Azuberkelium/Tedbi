@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TedBi's PT Game</title>
+    <!-- Use Tailwind CSS for a clean, mobile-first design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font for a modern and readable look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom CSS for the periodic table grid and elements */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        /* Flex container for the whole game to prevent scrolling */
+        .main-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+
+        .periodic-table-grid {
+            display: grid;
+            grid-template-columns: repeat(18, 1fr);
+            gap: 4px;
+            overflow: hidden; /* Prevent overflow on the grid itself */
+        }
+        
+        /* Two-column layout for mobile */
+        @media (max-width: 1024px) {
+            .periodic-table-grid {
+                grid-template-columns: repeat(10, 1fr);
+            }
+        }
+        
+        .element-tile {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 6px;
+            background-color: #21262d;
+            border: 2px solid #30363d;
+            transition: all 0.2s ease-in-out;
+            min-width: 40px;
+            min-height: 40px;
+        }
+
+        .element-tile:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .element-symbol {
+            font-size: 1rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .element-number {
+            font-size: 0.65rem;
+            opacity: 0.7;
+        }
+
+        .element-name {
+            font-size: 0.55rem;
+            opacity: 0.9;
+        }
+        
+        /* Responsive font sizes */
+        @media (min-width: 768px) {
+            .element-symbol { font-size: 1.5rem; }
+            .element-number { font-size: 0.75rem; }
+            .element-name { font-size: 0.65rem; }
+        }
+
+        /* Styling for interactive elements */
+        .active-element {
+            background-color: #2e5c46; /* A green color to indicate it can form a compound */
+            border-color: #55a687;
+        }
+
+        .selected-element {
+            background-color: #3b82f6; /* A blue color to indicate it's currently selected */
+            border-color: #60a5fa;
+            transform: scale(1.05);
+        }
+
+        .lanthanide-link, .actinide-link {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .lanthanide-link:hover, .actinide-link:hover {
+            color: #3b82f6;
+        }
+        
+        /* Custom grid for the f-block elements */
+        .f-block-grid {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 4px;
+            margin-top: 1rem;
+            
+        }
+
+        /* Pulse animation for elements in the mix zone */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .mix-element {
+            animation: pulse 1s infinite;
+        }
+
+        /* Modal styling for the Recipe Book, Info Panel, and Help Panel */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: #161b22;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid #30363d;
+            position: relative;
+        }
+
+        /* Loading animation for API call */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <main class="main-container flex flex-col lg:flex-row w-full mx-auto gap-8">
+
+        <!-- Left side: Periodic Table -->
+        <div class="flex-1 min-w-0">
+            <h1 class="text-3xl font-bold text-center mb-6">TedBi's PT Game</h1>
+            <div class="flex flex-wrap justify-center sm:justify-between items-center mb-4 gap-2">
+                <button id="show-info-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all">
+                    Info
+                </button>
+                <button id="show-help-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all">
+                    Help
+                </button>
+            </div>
+            
+            <div id="periodic-table-container" class="periodic-table-grid">
+                <!-- Elements will be generated here by JavaScript -->
+            </div>
+            
+            <div class="mt-4 flex flex-col items-center justify-center gap-2 text-xs sm:text-base">
+                <span id="lanthanide-link" class="lanthanide-link">57-71 * Lanthanides</span>
+                <span id="actinide-link" class="actinide-link">89-103 ** Actinides</span>
+            </div>
+            
+            <!-- F-block series will be rendered here dynamically -->
+            <div id="f-block-series" class="hidden">
+                <div id="lanthanide-series" class="f-block-grid"></div>
+                <div id="actinide-series" class="f-block-grid"></div>
+            </div>
+        </div>
+
+        <!-- Right side: Information and Mix Zone -->
+        <div class="lg:w-1/3 flex flex-col gap-6 min-w-0">
+            <!-- Stats Panel -->
+            <div id="info-panel" class="bg-gray-800 p-6 rounded-xl shadow-lg border-2 border-gray-700">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Element Information</h2>
+                <p id="info-message" class="text-gray-400">Click on an element to see its stats.</p>
+                <div id="element-stats" class="space-y-2 hidden">
+                    <p><strong>Name:</strong> <span id="stat-name"></span></p>
+                    <p><strong>Symbol:</strong> <span id="stat-symbol"></span></p>
+                    <p><strong>Atomic Number:</strong> <span id="stat-number"></span></p>
+                    <p><strong>Atomic Mass:</strong> <span id="stat-mass"></span></p>
+                    <p><strong>Category:</strong> <span id="stat-category"></span></p>
+                </div>
+            </div>
+
+            <!-- Mix Zone -->
+            <div id="mix-zone" class="bg-gray-800 p-6 rounded-xl shadow-lg border-2 border-gray-700">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Mix Zone</h2>
+                <div id="compound-container" class="flex flex-wrap items-center justify-center gap-4 min-h-[6rem] p-2 rounded-lg bg-gray-900 border-2 border-dashed border-gray-600">
+                    <p id="mix-message" class="text-gray-400 text-sm">Click an active element to add it here.</p>
+                </div>
+                <div id="compound-info" class="mt-4 hidden bg-gray-700 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold text-white">Compound: <span id="compound-name"></span></h3>
+                    <p id="compound-formula" class="text-lg text-white my-2"></p>
+                    <p id="compound-description" class="text-gray-300"></p>
+                </div>
+                <div class="mt-6 flex flex-col sm:flex-row gap-4">
+                    <button id="show-recipes-button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
+                        Generate Recipes
+                    </button>
+                    <button id="reset-button" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
+                        Reset Mix Zone
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal containers -->
+    <div id="recipe-book-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full max-w-lg">
+            <div class="flex justify-between items-center mb-4 border-b pb-2 border-gray-600">
+                <h2 class="text-2xl font-bold text-white">Generated Compound Recipes</h2>
+                <button id="close-recipes-modal-button" class="text-gray-400 hover:text-white text-3xl font-bold leading-none">&times;</button>
+            </div>
+            <div id="loader" class="hidden flex justify-center items-center h-40">
+                <div class="loader"></div>
+            </div>
+            <ul id="recipes-list" class="space-y-4">
+                <!-- Recipes will be dynamically added here -->
+            </ul>
+        </div>
+    </div>
+
+    <div id="info-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4 border-b pb-2 border-gray-600">
+                <h2 class="text-2xl font-bold text-white">About the Periodic Table</h2>
+                <button id="close-info-modal-button" class="text-gray-400 hover:text-white text-3xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="prose max-w-none text-gray-300">
+                <p>Everything we know of is made up of one or more elements. We order these elements in something called the periodic table.</p>
+                <p class="mt-2">The elements are grouped by atomic structure; this also means that elements that behave similarly are grouped together. Each element is made up of protons, neutrons and electrons.</p>
+                <p class="mt-2">Each element has its own atomic structure, and some of these structures easily form new bonds or break bonds with other elements.</p>
+                
+                <h3 class="text-lg font-semibold mt-4 text-white">Periods and Groups</h3>
+                <p class="mt-2">The rows of the table are called <strong>periods</strong>, hence the name!</p>
+                <p class="mt-2">You'll notice that some of the rows aren't full. There are gaps in the rows because the elements are ordered by their atomic shells, from left to right. Atomic shells are the regions of space where electrons live. In general, there are only a certain amount of electrons per shell before it must have a new or outer shell.</p>
+                <p class="mt-2">The periodic table also has vertical columns, and these are called <strong>groups</strong>. Each element in each column has the same number of electrons in its atomic outer shell.</p>
+                
+                <h3 class="text-lg font-semibold mt-4 text-white">Unique Elements</h3>
+                <p class="mt-2">Hydrogen and helium are unique. Hydrogen has one electron in its outer shell. It always wants to bond with another element to add its electrons to its own.</p>
+                <p class="mt-2">Helium has two electrons in its outer shell and is very stable — it doesn't want any more electrons.</p>
+                <p class="mt-2">The columns of the periodic table are often used to define families. The noble gases are all located in the far-right column of the table. That column is labelled Group Zero.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="help-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4 border-b pb-2 border-gray-600">
+                <h2 class="text-2xl font-bold text-white">How to Play</h2>
+                <button id="close-help-modal-button" class="text-gray-400 hover:text-white text-3xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="prose max-w-none text-gray-300">
+                <p>Welcome to TedBi's PT Game! Here's how to get started:</p>
+                <ul class="list-disc list-inside space-y-2 mt-4">
+                    <li>Elements that can form a compound are highlighted in <span class="text-green-400 font-bold">green</span>.</li>
+                    <li>Click on a <span class="text-green-400 font-bold">green</span> element. It will turn <span class="text-blue-400 font-bold">blue</span> and be added to the **Mix Zone**.</li>
+                    <li>The game will then highlight all other elements that can combine with your first choice.</li>
+                    <li>Click a second element to combine them. If a stable compound is formed, you will see its formula and description!</li>
+                    <li>If a combination doesn't work, you can click the **Reset** button to start over.</li>
+                </ul>
+
+                <h3 class="text-lg font-semibold mt-6 text-white">A Quick Guide to Naming</h3>
+                <p class="mt-2">Many chemical names follow simple rules. Understanding them can help you predict which elements might combine:</p>
+                <ul class="list-disc list-inside space-y-2 mt-4">
+                    <li>When a compound contains **Oxygen**, its name often ends in <span class="font-bold">"-oxide"</span> (e.g., Sodium Oxide, Aluminum Oxide).</li>
+                    <li>When a compound contains **Chlorine**, its name often ends in <span class="font-bold">"-chloride"</span> (e.g., Sodium Chloride, Hydrogen Chloride).</li>
+                    <li>The prefixes <span class="font-bold">"di-"</span>, <span class="font-bold">"tri-"</span>, and <span class="font-bold">"tetra-"</span> indicate the number of atoms of that element. For example, "carbon dioxide" means one carbon atom and **two** oxygen atoms.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log("Game script loaded successfully.");
+
+        // Define the elements and their pre-set stable compounds for the core mixing game.
+        // The new generative feature will add to this, but this is the core game logic.
+        const elements = [
+            { name: "Hydrogen", symbol: "H", number: 1, atomic_mass: "1.008", category: "nonmetal", xpos: 1, ypos: 1, can_form_compound: true, compounds: [
+                { with: "O", formula: "H₂O", compound_info: "Water, a fundamental molecule for life." }, { with: "C", formula: "CH₄", compound_info: "Methane, the main component of natural gas." }, { with: "N", formula: "NH₃", compound_info: "Ammonia, a colorless gas with a pungent smell." }, { with: "Cl", formula: "HCl", compound_info: "Hydrochloric acid, a strong acid used in industry and found in stomach acid." }, { with: "O", formula: "H₂O₂", compound_info: "Hydrogen peroxide, a clear liquid used as an antiseptic." }, { with: "S", formula: "H₂S", compound_info: "Hydrogen sulfide, a poisonous gas with a characteristic rotten egg smell." }, { with: "C", formula: "C₂H₂", compound_info: "Acetylene, a colorless gas widely used as a fuel." }, { with: "C", formula: "CH₃OH", compound_info: "Methanol, a simple alcohol also known as wood alcohol." }, { with: "P", formula: "PH₃", compound_info: "Phosphine, a colorless, flammable, and highly toxic gas." }, { with: "F", formula: "HF", compound_info: "Hydrogen fluoride, a highly corrosive and dangerous acid." }, { with: "Br", formula: "HBr", compound_info: "Hydrogen bromide, a strong acid used in the production of organic compounds." }, { with: "I", formula: "HI", compound_info: "Hydrogen iodide, a colorless gas." }, { with: "Se", formula: "H₂Se", compound_info: "Hydrogen selenide, a colorless, flammable gas." }
+            ] },
+            { name: "Helium", symbol: "He", number: 2, atomic_mass: "4.0026", category: "noble gas", xpos: 18, ypos: 1, can_form_compound: false },
+            { name: "Lithium", symbol: "Li", number: 3, atomic_mass: "6.94", category: "alkali metal", xpos: 1, ypos: 2, can_form_compound: true, compounds: [
+                { with: "O", formula: "Li₂O", compound_info: "Lithium oxide, an inorganic compound." }, { with: "F", formula: "LiF", compound_info: "Lithium fluoride, an inorganic compound." }, { with: "Cl", formula: "LiCl", compound_info: "Lithium chloride, a salt with a high melting point." }, { with: "H", formula: "LiH", compound_info: "Lithium hydride, an important reagent in synthetic chemistry." }, { with: "N", formula: "Li₃N", compound_info: "Lithium nitride, a red-purple crystalline solid." }, { with: "S", formula: "Li₂S", compound_info: "Lithium sulfide, an inorganic compound." }, { with: "Br", formula: "LiBr", compound_info: "Lithium bromide, a salt used in air conditioning systems." }
+            ] },
+            { name: "Beryllium", symbol: "Be", number: 4, atomic_mass: "9.0122", category: "alkaline earth metal", xpos: 2, ypos: 2, can_form_compound: true, compounds: [
+                { with: "O", formula: "BeO", compound_info: "Beryllium oxide, a white inorganic compound." }, { with: "Cl", formula: "BeCl₂", compound_info: "Beryllium chloride, an important starting material for other beryllium compounds." }, { with: "F", formula: "BeF₂", compound_info: "Beryllium fluoride, a crystalline solid." }, { with: "S", formula: "BeS", compound_info: "Beryllium sulfide, an inorganic compound." }
+            ] },
+            { name: "Boron", symbol: "B", number: 5, atomic_mass: "10.81", category: "metalloid", xpos: 13, ypos: 2, can_form_compound: true, compounds: [
+                { with: "H", formula: "BH₃", compound_info: "Borane, a colorless gas often used as a precursor to other boron compounds." }, { with: "F", formula: "BF₃", compound_info: "Boron trifluoride, a pungent, colorless gas." }, { with: "Cl", formula: "BCl₃", compound_info: "Boron trichloride, a colorless gas used in organic synthesis." }, { with: "O", formula: "B₂O₃", compound_info: "Boron trioxide, the most common oxide of boron." }, { with: "N", formula: "BN", compound_info: "Boron nitride, a heat-resistant and chemically inert material." }
+            ] },
+            { name: "Carbon", symbol: "C", number: 6, atomic_mass: "12.011", category: "nonmetal", xpos: 14, ypos: 2, can_form_compound: true, compounds: [
+                { with: "O", formula: "CO₂", compound_info: "Carbon dioxide, a gas essential for plant photosynthesis." }, { with: "O", formula: "CO", compound_info: "Carbon monoxide, a colorless, odorless gas." }, { with: "H", formula: "CH₄", compound_info: "Methane, the main component of natural gas." }, { with: "H", formula: "C₂H₂", compound_info: "Acetylene, a colorless gas widely used as a fuel." }, { with: "H", formula: "CH₃OH", compound_info: "Methanol, a simple alcohol also known as wood alcohol." }, { with: "S", formula: "CS₂", compound_info: "Carbon disulfide, a colorless volatile liquid." }, { with: "N", formula: "HCN", compound_info: "Hydrogen cyanide, a highly poisonous, colorless liquid." }, { with: "Si", formula: "SiC", compound_info: "Silicon carbide, a very hard compound used in abrasives." }, { with: "Cl", formula: "CCl₄", compound_info: "Carbon tetrachloride, a colorless liquid." }, { with: "Mg", formula: "MgCO₃", compound_info: "Magnesium carbonate, a white solid." }, { with: "Ca", formula: "CaCO₃", compound_info: "Calcium carbonate, the main component of limestone." }
+            ] },
+            { name: "Nitrogen", symbol: "N", number: 7, atomic_mass: "14.007", category: "nonmetal", xpos: 15, ypos: 2, can_form_compound: true, compounds: [
+                { with: "H", formula: "NH₃", compound_info: "Ammonia, a colorless gas with a pungent smell." }, { with: "O", formula: "N₂O", compound_info: "Nitrous oxide, a colorless gas known as laughing gas." }, { with: "O", formula: "NO₂", compound_info: "Nitrogen dioxide, a poisonous gas that is a major air pollutant." }, { with: "C", formula: "HCN", compound_info: "Hydrogen cyanide, a highly poisonous, colorless liquid." }, { with: "Li", formula: "Li₃N", compound_info: "Lithium nitride, a red-purple crystalline solid." }, { with: "B", formula: "BN", compound_info: "Boron nitride, a heat-resistant and chemically inert material." }, { with: "Na", formula: "NaN₃", compound_info: "Sodium azide, a toxic inorganic compound used in car airbags." }
+            ] },
+            { name: "Oxygen", symbol: "O", number: 8, atomic_mass: "15.999", category: "nonmetal", xpos: 16, ypos: 2, can_form_compound: true, compounds: [
+                { with: "H", formula: "H₂O", compound_info: "Water, a fundamental molecule for life." }, { with: "C", formula: "CO₂", compound_info: "Carbon dioxide, a gas essential for plant photosynthesis." }, { with: "C", formula: "CO", compound_info: "Carbon monoxide, a colorless, odorless gas." }, { with: "H", formula: "H₂O₂", compound_info: "Hydrogen peroxide, a clear liquid used as an antiseptic." }, { with: "Li", formula: "Li₂O", compound_info: "Lithium oxide, an inorganic compound." }, { with: "Na", formula: "Na₂O", compound_info: "Sodium oxide, a colorless solid." }, { with: "S", formula: "SO₂", compound_info: "Sulfur dioxide, a pungent, colorless gas." }, { with: "S", formula: "SO₃", compound_info: "Sulfur trioxide, a precursor to sulfuric acid." }, { with: "Fe", formula: "Fe₂O₃", compound_info: "Iron(III) oxide, commonly known as rust." }, { with: "Ca", formula: "CaO", compound_info: "Calcium oxide, also known as quicklime." }, { with: "Mg", formula: "MgO", compound_info: "Magnesium oxide, a white hygroscopic solid." }, { with: "Be", formula: "BeO", compound_info: "Beryllium oxide, a white inorganic compound." }, { with: "B", formula: "B₂O₃", compound_info: "Boron trioxide, the most common oxide of boron." }, { with: "N", formula: "N₂O", compound_info: "Nitrous oxide, a colorless gas known as laughing gas." }, { with: "N", formula: "NO₂", compound_info: "Nitrogen dioxide, a poisonous gas that is a major air pollutant." }, { with: "Al", formula: "Al₂O₃", compound_info: "Aluminum oxide, commonly known as alumina." }, { with: "Si", formula: "SiO₂", compound_info: "Silicon dioxide, the most abundant compound in the Earth's crust." }, { with: "P", formula: "P₄O₁₀", compound_info: "Phosphorus pentoxide, a powerful dehydrating agent." }, { with: "Na", formula: "NaOH", compound_info: "Sodium hydroxide, a strong base also known as caustic soda." }, { with: "K", formula: "K₂O", compound_info: "Potassium oxide, a basic ionic solid." }, { with: "Fe", formula: "FeO", compound_info: "Iron(II) oxide, a black powder." }, { with: "Mg", formula: "Mg(OH)₂", compound_info: "Magnesium hydroxide, a component of milk of magnesia." }, { with: "Na", formula: "NaNO₃", compound_info: "Sodium nitrate, also known as Chile saltpeter." }, { with: "Cu", formula: "CuO", compound_info: "Copper(II) oxide, a black solid." }, { with: "Zn", formula: "ZnO", compound_info: "Zinc oxide, used as a skin protectant." }, { with: "Ti", formula: "TiO₂", compound_info: "Titanium dioxide, a bright white pigment." }, { with: "P", formula: "P₂O₅", compound_info: "Diphosphorus pentoxide, a white crystalline solid." }
+            ] },
+            { name: "Fluorine", symbol: "F", number: 9, atomic_mass: "18.998", category: "halogen", xpos: 17, ypos: 2, can_form_compound: true, compounds: [
+                { with: "Li", formula: "LiF", compound_info: "Lithium fluoride, an inorganic compound." }, { with: "B", formula: "BF₃", compound_info: "Boron trifluoride, a pungent, colorless gas." }, { with: "H", formula: "HF", compound_info: "Hydrogen fluoride, a highly corrosive and dangerous acid." }, { with: "Be", formula: "BeF₂", compound_info: "Beryllium fluoride, a crystalline solid." }, { with: "Na", formula: "NaF", compound_info: "Sodium fluoride, an inorganic salt used in toothpaste." }, { with: "Ca", formula: "CaF₂", compound_info: "Calcium fluoride, the inorganic compound of calcium and fluorine." }
+            ] },
+            { name: "Neon", symbol: "Ne", number: 10, atomic_mass: "20.180", category: "noble gas", xpos: 18, ypos: 2, can_form_compound: false },
+            { name: "Sodium", symbol: "Na", number: 11, atomic_mass: "22.990", category: "alkali metal", xpos: 1, ypos: 3, can_form_compound: true, compounds: [
+                { with: "Cl", formula: "NaCl", compound_info: "Sodium Chloride, commonly known as table salt." }, { with: "O", formula: "Na₂O", compound_info: "Sodium oxide, a colorless solid." }, { with: "H", formula: "NaH", compound_info: "Sodium hydride, a highly reactive chemical." }, { with: "C", formula: "Na₂CO₃", compound_info: "Sodium carbonate, also known as washing soda." }, { with: "O", formula: "NaOH", compound_info: "Sodium hydroxide, a strong base also known as caustic soda." }, { with: "F", formula: "NaF", compound_info: "Sodium fluoride, an inorganic salt used in toothpaste." }, { with: "S", formula: "Na₂S", compound_info: "Sodium sulfide, a common chemical compound." }, { with: "N", formula: "NaN₃", compound_info: "Sodium azide, a toxic inorganic compound used in car airbags." }, { with: "O", formula: "NaNO₃", compound_info: "Sodium nitrate, also known as Chile saltpeter." }
+            ] },
+            { name: "Magnesium", symbol: "Mg", number: 12, atomic_mass: "24.305", category: "alkaline earth metal", xpos: 2, ypos: 3, can_form_compound: true, compounds: [
+                { with: "Cl", formula: "MgCl₂", compound_info: "Magnesium chloride, an ionic compound." }, { with: "O", formula: "MgO", compound_info: "Magnesium oxide, a white hygroscopic solid." }, { with: "O", formula: "Mg(OH)₂", compound_info: "Magnesium hydroxide, a component of milk of magnesia." }, { with: "S", formula: "MgSO₄", compound_info: "Magnesium sulfate, also known as Epsom salt." }, { with: "C", formula: "MgCO₃", compound_info: "Magnesium carbonate, a white solid." }
+            ] },
+            { name: "Aluminum", symbol: "Al", number: 13, atomic_mass: "26.982", category: "post-transition metal", xpos: 13, ypos: 3, can_form_compound: true, compounds: [
+                { with: "O", formula: "Al₂O₃", compound_info: "Aluminum oxide, commonly known as alumina." }, { with: "Cl", formula: "AlCl₃", compound_info: "Aluminum chloride, a common Lewis acid." }, { with: "S", formula: "Al₂(SO₄)₃", compound_info: "Aluminum sulfate, a white crystalline compound." }
+            ] },
+            { name: "Silicon", symbol: "Si", number: 14, atomic_mass: "28.085", category: "metalloid", xpos: 14, ypos: 3, can_form_compound: true, compounds: [
+                { with: "O", formula: "SiO₂", compound_info: "Silicon dioxide, the most abundant compound in the Earth's crust." }, { with: "C", formula: "SiC", compound_info: "Silicon carbide, a compound used in semiconductors." }
+            ] },
+            { name: "Phosphorus", symbol: "P", number: 15, atomic_mass: "30.974", category: "nonmetal", xpos: 15, ypos: 3, can_form_compound: true, compounds: [
+                { with: "O", formula: "P₄O₁₀", compound_info: "Phosphorus pentoxide, a powerful dehydrating agent." }, { with: "O", formula: "P₂O₅", compound_info: "Diphosphorus pentoxide, a white crystalline solid." }, { with: "Cl", formula: "PCl₃", compound_info: "Phosphorus trichloride, an important industrial chemical." }, { with: "H", formula: "PH₃", compound_info: "Phosphine, a colorless, flammable, and highly toxic gas." }
+            ] },
+            { name: "Sulfur", symbol: "S", number: 16, atomic_mass: "32.06", category: "nonmetal", xpos: 16, ypos: 3, can_form_compound: true, compounds: [
+                { with: "O", formula: "SO₂", compound_info: "Sulfur dioxide, a pungent, colorless gas." }, { with: "O", formula: "SO₃", compound_info: "Sulfur trioxide, a precursor to sulfuric acid." }, { with: "H", formula: "H₂S", compound_info: "Hydrogen sulfide, a poisonous gas with a characteristic rotten egg smell." }, { with: "C", formula: "CS₂", compound_info: "Carbon disulfide, a colorless volatile liquid." }, { with: "Fe", formula: "FeS", compound_info: "Iron(II) sulfide, a common mineral." }, { with: "Na", formula: "Na₂S", compound_info: "Sodium sulfide, a common chemical compound." }, { with: "Li", formula: "Li₂S", compound_info: "Lithium sulfide, an inorganic compound." }, { with: "Mg", formula: "MgSO₄", compound_info: "Magnesium sulfate, also known as Epsom salt." }, { with: "Al", formula: "Al₂(SO₄)₃", compound_info: "Aluminum sulfate, a white crystalline compound." }
+            ] },
+            { name: "Chlorine", symbol: "Cl", number: 17, atomic_mass: "35.45", category: "halogen", xpos: 17, ypos: 3, can_form_compound: true, compounds: [
+                { with: "Na", formula: "NaCl", compound_info: "Sodium Chloride, commonly known as table salt." }, { with: "H", formula: "HCl", compound_info: "Hydrochloric acid, a strong acid used in industry and found in stomach acid." }, { with: "Mg", formula: "MgCl₂", compound_info: "Magnesium chloride, an ionic compound." }, { with: "K", formula: "KCl", compound_info: "Potassium chloride, a metal halide salt." }, { with: "Ca", formula: "CaCl₂", compound_info: "Calcium chloride, a common salt used for de-icing roads." }, { with: "Al", formula: "AlCl₃", compound_info: "Aluminum chloride, a common Lewis acid." }, { with: "P", formula: "PCl₃", compound_info: "Phosphorus trichloride, an important industrial chemical." }, { with: "B", formula: "BCl₃", compound_info: "Boron trichloride, a colorless gas used in organic synthesis." }, { with: "O", formula: "HClO", compound_info: "Hypochlorous acid, a weak acid used as a sanitizer." }, { with: "C", formula: "CCl₄", compound_info: "Carbon tetrachloride, a colorless liquid." }, { with: "Ag", formula: "AgCl", compound_info: "Silver chloride, a white crystalline solid." }, { with: "Li", formula: "LiCl", compound_info: "Lithium chloride, a salt with a high melting point." }
+            ] },
+            { name: "Argon", symbol: "Ar", number: 18, atomic_mass: "39.948", category: "noble gas", xpos: 18, ypos: 3, can_form_compound: false },
+            { name: "Potassium", symbol: "K", number: 19, atomic_mass: "39.098", category: "alkali metal", xpos: 1, ypos: 4, can_form_compound: true, compounds: [
+                { with: "Cl", formula: "KCl", compound_info: "Potassium chloride, a metal halide salt." }, { with: "O", formula: "K₂O", compound_info: "Potassium oxide, a basic ionic solid." }, { with: "H", formula: "KH", compound_info: "Potassium hydride, an alkali metal hydride." }, { with: "S", formula: "K₂S", compound_info: "Potassium sulfide, a chemical compound." }
+            ] },
+            { name: "Calcium", symbol: "Ca", number: 20, atomic_mass: "40.078", category: "alkaline earth metal", xpos: 2, ypos: 4, can_form_compound: true, compounds: [
+                { with: "O", formula: "CaO", compound_info: "Calcium oxide, also known as quicklime." }, { with: "Cl", formula: "CaCl₂", compound_info: "Calcium chloride, a common salt used for de-icing roads." }, { with: "O", formula: "Ca(OH)₂", compound_info: "Calcium hydroxide, known as slaked lime." }, { with: "C", formula: "CaCO₃", compound_info: "Calcium carbonate, the main component of rocks like limestone and marble." }, { with: "F", formula: "CaF₂", compound_info: "Calcium fluoride, the inorganic compound of calcium and fluorine." }
+            ] },
+            { name: "Scandium", symbol: "Sc", number: 21, atomic_mass: "44.956", category: "transition metal", xpos: 3, ypos: 4, can_form_compound: false },
+            { name: "Titanium", symbol: "Ti", number: 22, atomic_mass: "47.867", category: "transition metal", xpos: 4, ypos: 4, can_form_compound: true, compounds: [
+                { with: "O", formula: "TiO₂", compound_info: "Titanium dioxide, a bright white pigment." }, { with: "Cl", formula: "TiCl₄", compound_info: "Titanium tetrachloride, a colorless to pale yellow liquid." }
+            ] },
+            { name: "Vanadium", symbol: "V", number: 23, atomic_mass: "50.942", category: "transition metal", xpos: 5, ypos: 4, can_form_compound: false },
+            { name: "Chromium", symbol: "Cr", number: 24, atomic_mass: "51.996", category: "transition metal", xpos: 6, ypos: 4, can_form_compound: false },
+            { name: "Manganese", symbol: "Mn", number: 25, atomic_mass: "54.938", category: "transition metal", xpos: 7, ypos: 4, can_form_compound: false },
+            { name: "Iron", symbol: "Fe", number: 26, atomic_mass: "55.845", category: "transition metal", xpos: 8, ypos: 4, can_form_compound: true, compounds: [
+                { with: "O", formula: "Fe₂O₃", compound_info: "Iron(III) oxide, commonly known as rust." }, { with: "S", formula: "FeS", compound_info: "Iron(II) sulfide, a common mineral." }, { with: "O", formula: "FeO", compound_info: "Iron(II) oxide, a black powder." }, { with: "Cl", formula: "FeCl₃", compound_info: "Iron(III) chloride, a common laboratory chemical." }
+            ] },
+            { name: "Cobalt", symbol: "Co", number: 27, atomic_mass: "58.933", category: "transition metal", xpos: 9, ypos: 4, can_form_compound: false },
+            { name: "Nickel", symbol: "Ni", number: 28, atomic_mass: "58.693", category: "transition metal", xpos: 10, ypos: 4, can_form_compound: false },
+            { name: "Copper", symbol: "Cu", number: 29, atomic_mass: "63.546", category: "transition metal", xpos: 11, ypos: 4, can_form_compound: true, compounds: [
+                { with: "O", formula: "CuO", compound_info: "Copper(II) oxide, a black solid." }
+            ] },
+            { name: "Zinc", symbol: "Zn", number: 30, atomic_mass: "65.38", category: "transition metal", xpos: 12, ypos: 4, can_form_compound: true, compounds: [
+                { with: "O", formula: "ZnO", compound_info: "Zinc oxide, used as a skin protectant." }, { with: "S", formula: "ZnS", compound_info: "Zinc sulfide, a semiconductor material." }
+            ] },
+            { name: "Gallium", symbol: "Ga", number: 31, atomic_mass: "69.723", category: "post-transition metal", xpos: 13, ypos: 4, can_form_compound: false },
+            { name: "Germanium", symbol: "Ge", number: 32, atomic_mass: "72.630", category: "metalloid", xpos: 14, ypos: 4, can_form_compound: false },
+            { name: "Arsenic", symbol: "As", number: 33, atomic_mass: "74.922", category: "metalloid", xpos: 15, ypos: 4, can_form_compound: false },
+            { name: "Selenium", symbol: "Se", number: 34, atomic_mass: "78.971", category: "nonmetal", xpos: 16, ypos: 4, can_form_compound: true, compounds: [
+                { with: "H", formula: "H₂Se", compound_info: "Hydrogen selenide, a colorless, flammable gas." }
+            ] },
+            { name: "Bromine", symbol: "Br", number: 35, atomic_mass: "79.904", category: "halogen", xpos: 17, ypos: 4, can_form_compound: true, compounds: [
+                { with: "H", formula: "HBr", compound_info: "Hydrogen bromide, a strong acid used in the production of organic compounds." }, { with: "Li", formula: "LiBr", compound_info: "Lithium bromide, a salt used in air conditioning systems." }
+            ] },
+            { name: "Krypton", symbol: "Kr", number: 36, atomic_mass: "83.798", category: "noble gas", xpos: 18, ypos: 4, can_form_compound: false },
+            { name: "Rubidium", symbol: "Rb", number: 37, atomic_mass: "85.468", category: "alkali metal", xpos: 1, ypos: 5, can_form_compound: true, compounds: [
+                { with: "O", formula: "Rb₂O", compound_info: "Rubidium oxide, an ionic compound." }
+            ] },
+            { name: "Strontium", symbol: "Sr", number: 38, atomic_mass: "87.62", category: "alkaline earth metal", xpos: 2, ypos: 5, can_form_compound: false },
+            { name: "Yttrium", symbol: "Y", number: 39, atomic_mass: "88.906", category: "transition metal", xpos: 3, ypos: 5, can_form_compound: false },
+            { name: "Zirconium", symbol: "Zr", number: 40, atomic_mass: "91.224", category: "transition metal", xpos: 4, ypos: 5, can_form_compound: false },
+            { name: "Niobium", symbol: "Nb", number: 41, atomic_mass: "92.906", category: "transition metal", xpos: 5, ypos: 5, can_form_compound: false },
+            { name: "Molybdenum", symbol: "Mo", number: 42, atomic_mass: "95.95", category: "transition metal", xpos: 6, ypos: 5, can_form_compound: false },
+            { name: "Technetium", symbol: "Tc", number: 43, atomic_mass: "[98]", category: "transition metal", xpos: 7, ypos: 5, can_form_compound: false },
+            { name: "Ruthenium", symbol: "Ru", number: 44, atomic_mass: "101.07", category: "transition metal", xpos: 8, ypos: 5, can_form_compound: false },
+            { name: "Rhodium", symbol: "Rh", number: 45, atomic_mass: "102.91", category: "transition metal", xpos: 9, ypos: 5, can_form_compound: false },
+            { name: "Palladium", symbol: "Pd", number: 46, atomic_mass: "106.42", category: "transition metal", xpos: 10, ypos: 5, can_form_compound: false },
+            { name: "Silver", symbol: "Ag", number: 47, atomic_mass: "107.87", category: "transition metal", xpos: 11, ypos: 5, can_form_compound: true, compounds: [
+                { with: "Cl", formula: "AgCl", compound_info: "Silver chloride, a white crystalline solid." }
+            ] },
+            { name: "Cadmium", symbol: "Cd", number: 48, atomic_mass: "112.41", category: "transition metal", xpos: 12, ypos: 5, can_form_compound: false },
+            { name: "Indium", symbol: "In", number: 49, atomic_mass: "114.82", category: "post-transition metal", xpos: 13, ypos: 5, can_form_compound: false },
+            { name: "Tin", symbol: "Sn", number: 50, atomic_mass: "118.71", category: "post-transition metal", xpos: 14, ypos: 5, can_form_compound: false },
+            { name: "Antimony", symbol: "Sb", number: 51, atomic_mass: "121.76", category: "metalloid", xpos: 15, ypos: 5, can_form_compound: false },
+            { name: "Tellurium", symbol: "Te", number: 52, atomic_mass: "127.60", category: "metalloid", xpos: 16, ypos: 5, can_form_compound: false },
+            { name: "Iodine", symbol: "I", number: 53, atomic_mass: "126.90", category: "halogen", xpos: 17, ypos: 5, can_form_compound: true, compounds: [
+                { with: "H", formula: "HI", compound_info: "Hydrogen iodide, a colorless gas." }
+            ] },
+            { name: "Xenon", symbol: "Xe", number: 54, atomic_mass: "131.29", category: "noble gas", xpos: 18, ypos: 5, can_form_compound: false },
+            { name: "Cesium", symbol: "Cs", number: 55, atomic_mass: "132.91", category: "alkali metal", xpos: 1, ypos: 6, can_form_compound: false },
+            { name: "Barium", symbol: "Ba", number: 56, atomic_mass: "137.33", category: "alkaline earth metal", xpos: 2, ypos: 6, can_form_compound: false },
+            { name: "Lanthanum", symbol: "La", number: 57, atomic_mass: "138.91", category: "lanthanide", xpos: 3, ypos: 6, can_form_compound: false },
+            { name: "Hafnium", symbol: "Hf", number: 72, atomic_mass: "178.49", category: "transition metal", xpos: 4, ypos: 6, can_form_compound: false },
+            { name: "Tantalum", symbol: "Ta", number: 73, atomic_mass: "180.95", category: "transition metal", xpos: 5, ypos: 6, can_form_compound: false },
+            { name: "Tungsten", symbol: "W", number: 74, atomic_mass: "183.84", category: "transition metal", xpos: 6, ypos: 6, can_form_compound: false },
+            { name: "Rhenium", symbol: "Re", number: 75, atomic_mass: "186.21", category: "transition metal", xpos: 7, ypos: 6, can_form_compound: false },
+            { name: "Osmium", symbol: "Os", number: 76, atomic_mass: "190.23", category: "transition metal", xpos: 8, ypos: 6, can_form_compound: false },
+            { name: "Iridium", symbol: "Ir", number: 77, atomic_mass: "192.22", category: "transition metal", xpos: 9, ypos: 6, can_form_compound: false },
+            { name: "Platinum", symbol: "Pt", number: 78, atomic_mass: "195.08", category: "transition metal", xpos: 10, ypos: 6, can_form_compound: false },
+            { name: "Gold", symbol: "Au", number: 79, atomic_mass: "196.97", category: "transition metal", xpos: 11, ypos: 6, can_form_compound: false },
+            { name: "Mercury", symbol: "Hg", number: 80, atomic_mass: "200.59", category: "transition metal", xpos: 12, ypos: 6, can_form_compound: false },
+            { name: "Thallium", symbol: "Tl", number: 81, atomic_mass: "204.38", category: "post-transition metal", xpos: 13, ypos: 6, can_form_compound: false },
+            { name: "Lead", symbol: "Pb", number: 82, atomic_mass: "207.2", category: "post-transition metal", xpos: 14, ypos: 6, can_form_compound: false },
+            { name: "Bismuth", symbol: "Bi", number: 83, atomic_mass: "208.98", category: "post-transition metal", xpos: 15, ypos: 6, can_form_compound: false },
+            { name: "Polonium", symbol: "Po", number: 84, atomic_mass: "[209]", category: "metalloid", xpos: 16, ypos: 6, can_form_compound: false },
+            { name: "Astatine", symbol: "At", number: 85, atomic_mass: "[210]", category: "halogen", xpos: 17, ypos: 6, can_form_compound: false },
+            { name: "Radon", symbol: "Rn", number: 86, atomic_mass: "[222]", category: "noble gas", xpos: 18, ypos: 6, can_form_compound: false },
+            { name: "Francium", symbol: "Fr", number: 87, atomic_mass: "[223]", category: "alkali metal", xpos: 1, ypos: 7, can_form_compound: false },
+            { name: "Radium", symbol: "Ra", number: 88, atomic_mass: "[226]", category: "alkaline earth metal", xpos: 2, ypos: 7, can_form_compound: false },
+            { name: "Actinium", symbol: "Ac", number: 89, atomic_mass: "[227]", category: "actinide", xpos: 3, ypos: 7, can_form_compound: false },
+            { name: "Rutherfordium", symbol: "Rf", number: 104, atomic_mass: "[267]", category: "transition metal", xpos: 4, ypos: 7, can_form_compound: false },
+            { name: "Dubnium", symbol: "Db", number: 105, atomic_mass: "[268]", category: "transition metal", xpos: 5, ypos: 7, can_form_compound: false },
+            { name: "Seaborgium", symbol: "Sg", number: 106, atomic_mass: "[269]", category: "transition metal", xpos: 6, ypos: 7, can_form_compound: false },
+            { name: "Bohrium", symbol: "Bh", number: 107, atomic_mass: "[270]", category: "transition metal", xpos: 7, ypos: 7, can_form_compound: false },
+            { name: "Hassium", symbol: "Hs", number: 108, atomic_mass: "[269]", category: "transition metal", xpos: 8, ypos: 7, can_form_compound: false },
+            { name: "Meitnerium", symbol: "Mt", number: 109, atomic_mass: "[278]", category: "unknown", xpos: 9, ypos: 7, can_form_compound: false },
+            { name: "Darmstadtium", symbol: "Ds", number: 110, atomic_mass: "[281]", category: "unknown", xpos: 10, ypos: 7, can_form_compound: false },
+            { name: "Roentgenium", symbol: "Rg", number: 111, atomic_mass: "[282]", category: "unknown", xpos: 11, ypos: 7, can_form_compound: false },
+            { name: "Copernicium", symbol: "Cn", number: 112, atomic_mass: "[285]", category: "transition metal", xpos: 12, ypos: 7, can_form_compound: false },
+            { name: "Nihonium", symbol: "Nh", number: 113, atomic_mass: "[286]", category: "unknown", xpos: 13, ypos: 7, can_form_compound: false },
+            { name: "Flerovium", symbol: "Fl", number: 114, atomic_mass: "[289]", category: "post-transition metal", xpos: 14, ypos: 7, can_form_compound: false },
+            { name: "Moscovium", symbol: "Mc", number: 115, atomic_mass: "[290]", category: "unknown", xpos: 15, ypos: 7, can_form_compound: false },
+            { name: "Livermorium", symbol: "Lv", number: 116, atomic_mass: "[293]", category: "unknown", xpos: 16, ypos: 7, can_form_compound: false },
+            { name: "Tennessine", symbol: "Ts", number: 117, atomic_mass: "[294]", category: "unknown", xpos: 17, ypos: 7, can_form_compound: false },
+            { name: "Oganesson", symbol: "Og", number: 118, atomic_mass: "[294]", category: "unknown", xpos: 18, ypos: 7, can_form_compound: false },
+            { name: "Cerium", symbol: "Ce", number: 58, atomic_mass: "140.12", category: "lanthanide", xpos: 4, ypos: 9, can_form_compound: false },
+            { name: "Praseodymium", symbol: "Pr", number: 59, atomic_mass: "140.91", category: "lanthanide", xpos: 5, ypos: 9, can_form_compound: false },
+            { name: "Neodymium", symbol: "Nd", number: 60, atomic_mass: "144.24", category: "lanthanide", xpos: 6, ypos: 9, can_form_compound: false },
+            { name: "Promethium", symbol: "Pm", number: 61, atomic_mass: "[145]", category: "lanthanide", xpos: 7, ypos: 9, can_form_compound: false },
+            { name: "Samarium", symbol: "Sm", number: 62, atomic_mass: "150.36", category: "lanthanide", xpos: 8, ypos: 9, can_form_compound: false },
+            { name: "Europium", symbol: "Eu", number: 63, atomic_mass: "151.96", category: "lanthanide", xpos: 9, ypos: 9, can_form_compound: false },
+            { name: "Gadolinium", symbol: "Gd", number: 64, atomic_mass: "157.25", category: "lanthanide", xpos: 10, ypos: 9, can_form_compound: false },
+            { name: "Terbium", symbol: "Tb", number: 65, atomic_mass: "158.93", category: "lanthanide", xpos: 11, ypos: 9, can_form_compound: false },
+            { name: "Dysprosium", symbol: "Dy", number: 66, atomic_mass: "162.50", category: "lanthanide", xpos: 12, ypos: 9, can_form_compound: false },
+            { name: "Holmium", symbol: "Ho", number: 67, atomic_mass: "164.93", category: "lanthanide", xpos: 13, ypos: 9, can_form_compound: false },
+            { name: "Erbium", symbol: "Er", number: 68, atomic_mass: "167.26", category: "lanthanide", xpos: 14, ypos: 9, can_form_compound: false },
+            { name: "Thulium", symbol: "Tm", number: 69, atomic_mass: "168.93", category: "lanthanide", xpos: 15, ypos: 9, can_form_compound: false },
+            { name: "Ytterbium", symbol: "Yb", number: 70, atomic_mass: "173.05", category: "lanthanide", xpos: 16, ypos: 9, can_form_compound: false },
+            { name: "Lutetium", symbol: "Lu", number: 71, atomic_mass: "174.97", category: "lanthanide", xpos: 17, ypos: 9, can_form_compound: false },
+            { name: "Thorium", symbol: "Th", number: 90, atomic_mass: "232.04", category: "actinide", xpos: 4, ypos: 10, can_form_compound: false },
+            { name: "Protactinium", symbol: "Pa", number: 91, atomic_mass: "231.04", category: "actinide", xpos: 5, ypos: 10, can_form_compound: false },
+            { name: "Uranium", symbol: "U", number: 92, atomic_mass: "238.03", category: "actinide", xpos: 6, ypos: 10, can_form_compound: false },
+            { name: "Neptunium", symbol: "Np", number: 93, atomic_mass: "[237]", category: "actinide", xpos: 7, ypos: 10, can_form_compound: false },
+            { name: "Plutonium", symbol: "Pu", number: 94, atomic_mass: "[244]", category: "actinide", xpos: 8, ypos: 10, can_form_compound: false },
+            { name: "Americium", symbol: "Am", number: 95, atomic_mass: "[243]", category: "actinide", xpos: 9, ypos: 10, can_form_compound: false },
+            { name: "Curium", symbol: "Cm", number: 96, atomic_mass: "[247]", category: "actinide", xpos: 10, ypos: 10, can_form_compound: false },
+            { name: "Berkelium", symbol: "Bk", number: 97, atomic_mass: "[247]", category: "actinide", xpos: 11, ypos: 10, can_form_compound: false },
+            { name: "Californium", symbol: "Cf", number: 98, atomic_mass: "[251]", category: "actinide", xpos: 12, ypos: 10, can_form_compound: false },
+            { name: "Einsteinium", symbol: "Es", number: 99, atomic_mass: "[252]", category: "actinide", xpos: 13, ypos: 10, can_form_compound: false },
+            { name: "Fermium", symbol: "Fm", number: 100, atomic_mass: "[257]", category: "actinide", xpos: 14, ypos: 10, can_form_compound: false },
+            { name: "Mendelevium", symbol: "Md", number: 101, atomic_mass: "[258]", category: "actinide", xpos: 15, ypos: 10, can_form_compound: false },
+            { name: "Nobelium", symbol: "No", number: 102, atomic_mass: "[259]", category: "actinide", xpos: 16, ypos: 10, can_form_compound: false },
+            { name: "Lawrencium", symbol: "Lr", number: 103, atomic_mass: "[262]", category: "actinide", xpos: 17, ypos: 10, can_form_compound: false }
+        ];
+
+        let selectedElementsInMix = [];
+        let state = 'selecting_first_element';
+        let isFBlockVisible = false;
+
+        const elementsContainer = document.getElementById('periodic-table-container');
+        const infoMessage = document.getElementById('info-message');
+        const elementStats = document.getElementById('element-stats');
+        const statName = document.getElementById('stat-name');
+        const statSymbol = document.getElementById('stat-symbol');
+        const statNumber = document.getElementById('stat-number');
+        const statMass = document.getElementById('stat-mass');
+        const statCategory = document.getElementById('stat-category');
+        const compoundContainer = document.getElementById('compound-container');
+        const mixMessage = document.getElementById('mix-message');
+        const compoundInfo = document.getElementById('compound-info');
+        const compoundName = document.getElementById('compound-name');
+        const compoundFormula = document.getElementById('compound-formula');
+        const compoundDescription = document.getElementById('compound-description');
+        const resetButton = document.getElementById('reset-button');
+        const showRecipesButton = document.getElementById('show-recipes-button');
+        const recipeBookModal = document.getElementById('recipe-book-modal');
+        const closeRecipesModalButton = document.getElementById('close-recipes-modal-button');
+        const recipesList = document.getElementById('recipes-list');
+        const lanthanideLink = document.getElementById('lanthanide-link');
+        const actinideLink = document.getElementById('actinide-link');
+        const showInfoButton = document.getElementById('show-info-button');
+        const infoModal = document.getElementById('info-modal');
+        const closeInfoModalButton = document.getElementById('close-info-modal-button');
+        const showHelpButton = document.getElementById('show-help-button');
+        const helpModal = document.getElementById('help-modal');
+        const closeHelpModalButton = document.getElementById('close-help-modal-button');
+        const fBlockSeries = document.getElementById('f-block-series');
+        const lanthanideSeriesContainer = document.getElementById('lanthanide-series');
+        const actinideSeriesContainer = document.getElementById('actinide-series');
+        const loader = document.getElementById('loader');
+
+        /**
+         * Creates a single periodic table element tile.
+         * @param {object} element - The element data.
+         * @returns {HTMLElement} The created div element.
+         */
+        function createElementTile(element) {
+            const tile = document.createElement('div');
+            tile.className = `element-tile ${element.category.replace(/\s/g, '-')}`;
+            tile.style.gridColumn = element.xpos;
+            tile.style.gridRow = element.ypos;
+            tile.dataset.symbol = element.symbol;
+            tile.innerHTML = `
+                <span class="element-number">${element.number}</span>
+                <span class="element-symbol">${element.symbol}</span>
+                <span class="element-name">${element.name}</span>
+            `;
+            return tile;
+        }
+
+        /**
+         * Renders the full periodic table on the page.
+         */
+        function renderPeriodicTable() {
+            elementsContainer.innerHTML = '';
+            lanthanideSeriesContainer.innerHTML = '';
+            actinideSeriesContainer.innerHTML = '';
+
+            elements.forEach(element => {
+                if (element.category === 'lanthanide') {
+                    const tile = createElementTile(element);
+                    tile.style.gridColumn = element.number - 54; // Adjust column for f-block
+                    lanthanideSeriesContainer.appendChild(tile);
+                } else if (element.category === 'actinide') {
+                    const tile = createElementTile(element);
+                    tile.style.gridColumn = element.number - 86; // Adjust column for f-block
+                    actinideSeriesContainer.appendChild(tile);
+                } else {
+                    const tile = createElementTile(element);
+                    elementsContainer.appendChild(tile);
+                }
+            });
+            updateCompoundFormingElements();
+        }
+
+        /**
+         * Highlights elements that can form compounds based on the current game state.
+         */
+        function updateCompoundFormingElements() {
+            document.querySelectorAll('.active-element').forEach(el => el.classList.remove('active-element'));
+
+            if (state === 'selecting_first_element') {
+                elements.filter(el => el.can_form_compound).forEach(element => {
+                    const tile = document.querySelector(`[data-symbol="${element.symbol}"]`);
+                    if (tile) {
+                        tile.classList.add('active-element');
+                    }
+                });
+            } else if (state === 'selecting_second_element') {
+                const firstElement = selectedElementsInMix[0];
+                if (firstElement && firstElement.compounds) {
+                    firstElement.compounds.forEach(compound => {
+                        const tile = document.querySelector(`[data-symbol="${compound.with}"]`);
+                        if (tile) {
+                            tile.classList.add('active-element');
+                        }
+                    });
+                }
+            }
+        }
+
+        /**
+         * Displays the information for a given element in the info panel.
+         * @param {object} element - The element data.
+         */
+        function showElementInfo(element) {
+            infoMessage.classList.add('hidden');
+            elementStats.classList.remove('hidden');
+            statName.textContent = element.name;
+            statSymbol.textContent = element.symbol;
+            statNumber.textContent = element.number;
+            statMass.textContent = element.atomic_mass;
+            statCategory.textContent = element.category;
+        }
+
+        /**
+         * Adds a selected element to the mix zone.
+         * @param {object} element - The element data.
+         */
+        function addElementToMix(element) {
+            if (state === 'compound_formed' || selectedElementsInMix.length >= 2) return;
+
+            const mixTile = document.createElement('div');
+            mixTile.className = `element-tile mix-element w-16 h-16`;
+            mixTile.innerHTML = `
+                <span class="element-symbol text-2xl">${element.symbol}</span>
+                <span class="element-number">${element.number}</span>
+            `;
+            compoundContainer.appendChild(mixTile);
+            mixMessage.classList.add('hidden');
+            selectedElementsInMix.push(element);
+        }
+
+        /**
+         * Checks if the two selected elements form a stable compound.
+         */
+        function checkCompound() {
+            if (selectedElementsInMix.length === 2) {
+                const [el1, el2] = selectedElementsInMix.sort((a, b) => a.number - b.number);
+                
+                const compound1 = el1.compounds?.find(c => c.with === el2.symbol);
+                const compound2 = el2.compounds?.find(c => c.with === el1.symbol);
+
+                if (compound1 || compound2) {
+                    const compound = compound1 || compound2;
+                    state = 'compound_formed';
+                    document.querySelectorAll('.mix-element').forEach(el => el.remove());
+                    
+                    const compoundTile = document.createElement('div');
+                    compoundTile.className = `element-tile w-24 h-24 bg-blue-700 border-blue-500`;
+                    compoundTile.innerHTML = `<span class="text-xl font-bold">${compound.formula}</span>`;
+                    compoundContainer.appendChild(compoundTile);
+
+                    compoundInfo.classList.remove('hidden');
+                    compoundName.textContent = compound.formula;
+                    compoundFormula.textContent = `(${el1.symbol} + ${el2.symbol})`;
+                    compoundDescription.textContent = compound.compound_info;
+
+                    document.querySelectorAll('.active-element').forEach(el => el.classList.remove('active-element'));
+                }
+            }
+        }
+
+        /**
+         * Resets the game to its initial state.
+         */
+        function resetGame() {
+            selectedElementsInMix = [];
+            state = 'selecting_first_element';
+            compoundContainer.innerHTML = `<p id="mix-message" class="text-gray-400 text-sm">Click an active element to add it here.</p>`;
+            mixMessage.classList.remove('hidden');
+            compoundInfo.classList.add('hidden');
+            updateCompoundFormingElements();
+        }
+
+        /**
+         * Uses the Gemini API to generate a list of stable compounds.
+         */
+        async function generateCompounds() {
+            // Show loading state
+            recipesList.innerHTML = '';
+            loader.classList.remove('hidden');
+
+            // Define the prompt for the API call
+            const prompt = `Generate 10 stable chemical compounds. For each compound, provide its full name, a valid chemical formula, and a brief description of what it is. The compounds should be simple combinations of 2-3 elements from the periodic table, prioritizing common elements. Return the data as a JSON array.`;
+
+            // Define the JSON schema for a structured response
+            const payload = {
+                contents: [{
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "name": { "type": "STRING" },
+                                "formula": { "type": "STRING" },
+                                "description": { "type": "STRING" }
+                            },
+                            "propertyOrdering": ["name", "formula", "description"]
+                        }
+                    }
+                }
+            };
+            
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            let retries = 0;
+            const maxRetries = 5;
+            const initialDelay = 1000;
+
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429) { // Rate limit exceeded
+                            retries++;
+                            const delay = initialDelay * Math.pow(2, retries);
+                            console.log(`Rate limit exceeded. Retrying in ${delay}ms...`);
+                            await new Promise(res => setTimeout(res, delay));
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const json = result.candidates[0].content.parts[0].text;
+                        const parsedJson = JSON.parse(json);
+                        return parsedJson;
+                    } else {
+                        console.error("API response structure is unexpected or content is missing.");
+                        break;
+                    }
+                } catch (error) {
+                    console.error("Error generating compounds:", error);
+                    break;
+                }
+            }
+            return [];
+        }
+
+        /**
+         * Dynamically generates the list of stable compounds for the recipe book.
+         */
+        async function updateRecipesList() {
+            recipesList.innerHTML = '';
+            
+            // Call the generative function
+            const newRecipes = await generateCompounds();
+
+            // Hide the loader
+            loader.classList.add('hidden');
+
+            if (newRecipes.length > 0) {
+                newRecipes.forEach(recipe => {
+                    const li = document.createElement('li');
+                    li.className = 'bg-gray-800 p-4 rounded-lg border border-gray-700';
+                    li.innerHTML = `
+                        <h4 class="text-lg font-bold text-white">${recipe.name}</h4>
+                        <p class="text-sm font-semibold text-gray-400 mt-1">${recipe.formula}</p>
+                        <p class="text-sm text-gray-300 mt-2">${recipe.description}</p>
+                    `;
+                    recipesList.appendChild(li);
+                });
+            } else {
+                recipesList.innerHTML = `<p class="text-center text-gray-400">Could not generate new recipes. Please try again.</p>`;
+            }
+        }
+        
+        /**
+         * Toggles the visibility of the f-block series.
+         */
+        function toggleFBlockSeries() {
+            isFBlockVisible = !isFBlockVisible;
+            if (isFBlockVisible) {
+                fBlockSeries.classList.remove('hidden');
+            } else {
+                fBlockSeries.classList.add('hidden');
+            }
+        }
+
+        window.onload = function() {
+            renderPeriodicTable();
+
+            elementsContainer.addEventListener('click', (event) => {
+                let target = event.target;
+                while (target && !target.classList.contains('element-tile')) {
+                    target = target.parentNode;
+                }
+
+                if (target) {
+                    const symbol = target.dataset.symbol;
+                    const element = elements.find(el => el.symbol === symbol);
+                    if (element) {
+                        showElementInfo(element);
+                        if (state === 'selecting_first_element' && element.can_form_compound) {
+                            document.querySelectorAll('.selected-element').forEach(el => el.classList.remove('selected-element'));
+                            target.classList.add('selected-element');
+                            addElementToMix(element);
+                            state = 'selecting_second_element';
+                            updateCompoundFormingElements();
+                        } else if (state === 'selecting_second_element' && target.classList.contains('active-element')) {
+                            const firstElement = selectedElementsInMix[0];
+                            const canCombine = firstElement.compounds?.some(c => c.with === element.symbol);
+                            if (canCombine) {
+                                addElementToMix(element);
+                                checkCompound();
+                            }
+                        }
+                    }
+                }
+            });
+            
+            fBlockSeries.addEventListener('click', (event) => {
+                 let target = event.target;
+                while (target && !target.classList.contains('element-tile')) {
+                    target = target.parentNode;
+                }
+
+                if (target) {
+                    const symbol = target.dataset.symbol;
+                    const element = elements.find(el => el.symbol === symbol);
+                    if (element) {
+                        showElementInfo(element);
+                        if (state === 'selecting_first_element' && element.can_form_compound) {
+                            document.querySelectorAll('.selected-element').forEach(el => el.classList.remove('selected-element'));
+                            target.classList.add('selected-element');
+                            addElementToMix(element);
+                            state = 'selecting_second_element';
+                            updateCompoundFormingElements();
+                        } else if (state === 'selecting_second_element' && target.classList.contains('active-element')) {
+                            const firstElement = selectedElementsInMix[0];
+                            const canCombine = firstElement.compounds?.some(c => c.with === element.symbol);
+                            if (canCombine) {
+                                addElementToMix(element);
+                                checkCompound();
+                            }
+                        }
+                    }
+                }
+            });
+
+            resetButton.addEventListener('click', resetGame);
+            showRecipesButton.addEventListener('click', () => {
+                updateRecipesList();
+                recipeBookModal.classList.remove('hidden');
+            });
+            closeRecipesModalButton.addEventListener('click', () => {
+                recipeBookModal.classList.add('hidden');
+            });
+            showInfoButton.addEventListener('click', () => {
+                infoModal.classList.remove('hidden');
+            });
+            closeInfoModalButton.addEventListener('click', () => {
+                infoModal.classList.add('hidden');
+            });
+            showHelpButton.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
+            });
+            closeHelpModalButton.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+            lanthanideLink.addEventListener('click', toggleFBlockSeries);
+            actinideLink.addEventListener('click', toggleFBlockSeries);
+        };
+    </script>
+</body>
+</html>
